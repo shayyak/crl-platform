@@ -1,0 +1,12 @@
+# FORMAT of common/ca-bundle.values.yaml (create the real file INSIDE the network: PEM is blocked in transfer).
+# The organisation's CA bundle, used by every component for TLS (S3, publish points). Public certificates only -
+# never a private key. Order: intermediates first, then roots. Argo CD passes the real file to every chart as the
+# first value file; a site's own values.yaml can still override caBundle.
+# Rules: "caBundle: |" at the start of the line; every certificate line indented by exactly 2 spaces; spaces, no tabs.
+caBundle: |
+  -----BEGIN CERTIFICATE-----
+  (intermediate CA certificate, base64 lines)
+  -----END CERTIFICATE-----
+  -----BEGIN CERTIFICATE-----
+  (root CA certificate, base64 lines)
+  -----END CERTIFICATE-----

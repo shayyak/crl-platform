@@ -1,0 +1,7 @@
+# Site sou (production). Only what differs from the chart defaults (serving/chart/crl-nginx/values.yaml).
+s3:
+  host: S3_HOST_SOU            # host name of this site's S3 endpoint, no https:// and no port
+  tenant: TENANT_SOU           # the S3 tenant that owns the bucket (anonymous URLs need it)
+  bucket: BUCKET               # the public, CRL-only bucket on this site's S3
+route:
+  host: ROUTE_HOST_SOU         # the host name clients use for this site

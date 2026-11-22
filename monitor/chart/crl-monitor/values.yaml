@@ -1,0 +1,28 @@
+# Defaults for every site. Site folders (monitor/sites/<site>/values.yaml) override only what differs.
+image: registry.example/pki/crl-monitor@sha256:REPLACE_WITH_DIGEST
+schedule: "*/5 * * * *"
+site: REPLACE_SITE                 # the cluster this monitor runs in (sou or cen); set in the site values
+targets:                           # both publish endpoints are checked from every site
+  - {name: publish1, baseUrl: "http://publish1.com"}
+  - {name: publish2, baseUrl: "http://publish2.com"}
+# CRL list: one line per CRL, "<full path from the server root>   <CA name = key in caBundles without .pem>"
+crlList: |
+  /shay/eos/shay.crl      ca-shay
+  /shay/eos/shay+.crl     ca-shay
+# Pinned CA certificates, one key <ca-name>.pem per CA (all key generations, PEM).
+caBundles:
+  ca-shay.pem: |
+    REPLACE WITH THE CA CERTIFICATE(S)
+# CA bundle that verifies Splunk HEC's TLS (Python does not use the OS trust store).
+splunkCaBundle: |
+  REPLACE WITH THE INTERNAL CA BUNDLE
+splunk:
+  url: https://splunk.example/services/collector/event
+  sourcetype: "crl:monitor"
+  source: crl-monitor
+hecSecret: crl-monitor-hec         # created out of band: oc create secret generic crl-monitor-hec --from-literal=hec-token=<token>
+stateStorage: 64Mi
+# Egress allow-list (NetworkPolicy works on IPs): publish endpoints and Splunk HEC from this cluster.
+networkPolicy:
+  publishCidrs: ["192.0.2.10/32", "192.0.2.20/32"]   # REPLACE: publish1, publish2
+  splunkCidrs: ["192.0.2.30/32"]                     # REPLACE: Splunk HEC

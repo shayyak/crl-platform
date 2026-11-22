@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}
+  labels: {{- include "crl-nginx.labels" . | nindent 4 }}
+data:
+  nginx.conf: |
+    {{- include "crl-nginx.conf" . | nindent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-s3-ca
+  labels: {{- include "crl-nginx.labels" . | nindent 4 }}
+data:
+  ca.pem: |
+    {{- include "crl-nginx.caBundle" . | nindent 4 }}

@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crl-monitor"
+version = "1.1.0"
+description = "Checks that every CRL served by the publish endpoints is present, authentic, valid, current and identical on all sites."
+requires-python = ">=3.11"
+dependencies = [
+    "cryptography>=42",
+    "requests>=2.31",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.5"]
+
+[project.scripts]
+crl-monitor = "crl_monitor:main"
+
+[tool.setuptools]
+py-modules = ["crl_monitor"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = ["S101"]   # assert is fine in tests
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S"]

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: crl-nginx
+description: CRL serving layer - Nginx caching proxy in front of one site's S3 (docs/adr/0008).
+type: application
+version: 1.1.0          # 1.1.0: names from the release name; CPU request 250m, memory request = limit
+appVersion: "nginx-1.24"

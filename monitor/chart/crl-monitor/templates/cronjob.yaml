@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Release.Name }}
+  labels: {app: {{ .Release.Name }}, app.kubernetes.io/instance: {{ .Release.Name }}}
+spec:
+  schedule: {{ .Values.schedule | quote }}
+  concurrencyPolicy: Forbid           # never two runs on the same state
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 0                 # the next scheduled run is the retry
+      activeDeadlineSeconds: 240
+      template:
+        metadata:
+          labels: {app: {{ .Release.Name }}, app.kubernetes.io/instance: {{ .Release.Name }}}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: monitor
+              image: {{ required "image is required" .Values.image }}
+              args: ["--config", "/etc/crl-monitor/config.yaml"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              resources:
+                requests: {cpu: 50m, memory: 64Mi}
+                limits: {cpu: 500m, memory: 256Mi}
+              volumeMounts:
+                - {name: config, mountPath: /etc/crl-monitor, readOnly: true}
+                - {name: ca, mountPath: /etc/crl-monitor-ca, readOnly: true}
+                - {name: tls, mountPath: /etc/crl-monitor-tls, readOnly: true}
+                - {name: hec-token, mountPath: /var/run/secrets/crl-monitor, readOnly: true}
+                - {name: state, mountPath: /var/lib/crl-monitor}
+                - {name: tmp, mountPath: /tmp}
+          volumes:
+            - name: config
+              configMap: {name: {{ .Release.Name }}-config}
+            - name: ca
+              configMap: {name: {{ .Release.Name }}-ca}
+            - name: tls
+              configMap: {name: {{ .Release.Name }}-tls}
+            - name: hec-token
+              secret: {secretName: {{ .Values.hecSecret }}, defaultMode: 0400}
+            - name: state
+              persistentVolumeClaim: {claimName: {{ .Release.Name }}-state}
+            - name: tmp
+              emptyDir: {sizeLimit: 16Mi}

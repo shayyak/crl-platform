@@ -1,0 +1,6 @@
+apiVersion: v2
+name: crl-monitor
+description: Checks the CRLs served by the publish endpoints (presence, signature, validity, number, cross-site consistency). Runs as a CronJob in one site's cluster.
+type: application
+version: 1.0.0
+appVersion: "1.1.0"

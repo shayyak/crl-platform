@@ -1,0 +1,30 @@
+# Defaults for every site. On top of these: serving/sites/<site>/values.yaml (S3 host, tenant, bucket, route host).
+# Installed by Argo CD, Helm release crl-nginx (by hand: helm upgrade --install crl-nginx ./crl-nginx -f ../../sites/sou/values.yaml).
+
+s3:
+  host: ""          # required: host name of this site's S3 endpoint (no https://, no port)
+  tenant: ""        # required: the S3 tenant that owns the bucket (anonymous URLs need it)
+  bucket: ""        # required: the public, CRL-only bucket of this site
+
+caBundle: ""        # the organisation's CA bundle (PEM) for TLS. Comes from common/ca-bundle.values.yaml (same for
+                    # every component and site). Empty = files/ca-bundle.pem in this chart (fallback).
+
+route:
+  host: ""          # empty: OpenShift generates a host. Production: set per site in sites/<site>/values.yaml
+
+replicas: 3         # spread over different nodes; with the PDB at most one is down during maintenance
+
+# Pin by digest in production: registry.access.redhat.com/ubi9/nginx-124@sha256:<digest>
+image: registry.access.redhat.com/ubi9/nginx-124:latest
+
+resources:
+  requests:
+    cpu: 250m               # the cluster's LimitRange allows limit/request <= 4: 1 core / 250m = 4
+    memory: 256Mi           # cluster policy: memory request = limit (1:1). nginx (2 workers, 10m cache zone) uses
+                            # a few tens of Mi; the cache itself is on disk (emptyDir), not in memory
+    ephemeralStorage: 1Gi   # cache + /tmp live on the node's disk
+  limits:
+    cpu: "1"                # required by the cluster policy. One full core: nginx runs 2 workers and serves from
+                            # cache, so it stays far below this; a low limit would throttle it under a burst
+    memory: 256Mi
+    ephemeralStorage: 2Gi

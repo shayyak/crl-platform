@@ -1,0 +1,5 @@
+# Site sou: only what differs from monitor/chart/crl-monitor/values.yaml.
+site: sou
+networkPolicy:
+  publishCidrs: ["192.0.2.10/32", "192.0.2.20/32"]   # REPLACE: publish1, publish2 as seen from this cluster
+  splunkCidrs: ["192.0.2.30/32"]                     # REPLACE: Splunk HEC as seen from this cluster

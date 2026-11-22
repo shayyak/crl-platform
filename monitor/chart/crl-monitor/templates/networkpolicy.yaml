@@ -1,0 +1,33 @@
+# The monitor accepts no connections and may only reach DNS, the publish endpoints and Splunk HEC.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}
+  labels: {app: {{ .Release.Name }}, app.kubernetes.io/instance: {{ .Release.Name }}}
+spec:
+  podSelector:
+    matchLabels: {app: {{ .Release.Name }}}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: openshift-dns}
+      ports:
+        - {protocol: UDP, port: 5353}
+        - {protocol: TCP, port: 5353}
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        {{- range .Values.networkPolicy.publishCidrs }}
+        - ipBlock: {cidr: {{ . }}}
+        {{- end }}
+      ports:
+        - {protocol: TCP, port: 80}
+        - {protocol: TCP, port: 443}
+    - to:
+        {{- range .Values.networkPolicy.splunkCidrs }}
+        - ipBlock: {cidr: {{ . }}}
+        {{- end }}
+      ports:
+        - {protocol: TCP, port: 443}

@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-config
+  labels: {app: {{ .Release.Name }}, app.kubernetes.io/instance: {{ .Release.Name }}}
+data:
+  config.yaml: |
+    environment: prod
+    site: {{ required "site is required" .Values.site }}
+    targets:
+      {{- range .Values.targets }}
+      - {name: {{ .name }}, baseUrl: {{ .baseUrl | quote }}}
+      {{- end }}
+    listFile: /etc/crl-monitor/crl-list.txt
+    caDir: /etc/crl-monitor-ca
+    stateFile: /var/lib/crl-monitor/state.json
+    expiryWarning:
+      defaultHours: 17
+      rules:
+        - {match: root, hours: 168}
+    http: {timeoutSeconds: 10, retries: 3}
+    alerting: {consecutiveFailures: 2, divergenceMinutes: 30, clockSkewMinutes: 5}
+    splunk:
+      url: {{ .Values.splunk.url | quote }}
+      tokenFile: /var/run/secrets/crl-monitor/hec-token
+      sourcetype: {{ .Values.splunk.sourcetype | quote }}
+      source: {{ .Values.splunk.source | quote }}
+      timeoutSeconds: 10
+      verifyTls: /etc/crl-monitor-tls/ca-bundle.pem
+  crl-list.txt: |
+{{ .Values.crlList | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-ca
+  labels: {app: {{ .Release.Name }}, app.kubernetes.io/instance: {{ .Release.Name }}}
+data:
+{{- range $name, $pem := .Values.caBundles }}
+  {{ $name }}: |
+{{ $pem | indent 4 }}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-tls
+  labels: {app: {{ .Release.Name }}, app.kubernetes.io/instance: {{ .Release.Name }}}
+data:
+  ca-bundle.pem: |
+{{ .Values.splunkCaBundle | indent 4 }}

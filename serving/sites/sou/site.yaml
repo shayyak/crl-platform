@@ -1,0 +1,6 @@
+# Read by the ApplicationSet (argocd/apps/crl-platform-appset.yaml): one Argo Application, crl-nginx-sou.
+app: crl-nginx                   # Application name crl-nginx-sou, Helm release (= every resource name) crl-nginx
+chart: serving/chart/crl-nginx   # the chart this Application deploys
+site: sou                     # production (must equal the folder name: the values path is built from it)
+cluster: SOU_CLUSTER          # the cluster's name in Argo CD (Settings -> Clusters)
+namespace: NAMESPACE_SOU      # the OpenShift project (lowercase, hyphens), e.g. pki-operations-publish

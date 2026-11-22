@@ -1,0 +1,36 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ .Release.Name }}
+  labels: {{- include "crl-nginx.labels" . | nindent 4 }}
+spec:
+  # Planned maintenance (drain, upgrade) takes at most one pod at a time. maxUnavailable rather than
+  # minAvailable: it works for any replica count and never blocks a drain completely.
+  maxUnavailable: 1
+  selector:
+    matchLabels: {{- include "crl-nginx.labels" . | nindent 6 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}
+  labels: {{- include "crl-nginx.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "crl-nginx.labels" . | nindent 4 }}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+---
+# Plain HTTP (no tls section on purpose: a CDP must not depend on TLS).
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ .Release.Name }}
+  labels: {{- include "crl-nginx.labels" . | nindent 4 }}
+  annotations:
+    haproxy.router.openshift.io/disable_cookies: "true"
+spec:
+  {{- with .Values.route.host }}
+  host: {{ . }}
+  {{- end }}
+  to: {kind: Service, name: {{ .Release.Name }}}
+  port: {targetPort: http}

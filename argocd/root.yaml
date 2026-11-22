@@ -1,0 +1,23 @@
+# ROOT (app of apps). The ONLY object created by hand, once:
+#   Argo CD UI: + New App -> Edit as YAML -> paste this file -> Create      (or: oc apply -n <argo-namespace> -f root.yaml)
+# From then on, Argo manages everything in argocd/apps/ from Git: the Nginx ApplicationSet and (later) the monitor. A change there = a commit. Something deleted or edited by hand = put back by Argo.
+#
+# Replace: ARGO_NAMESPACE, REPO_URL.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: publish-root
+  namespace: ARGO_NAMESPACE                 # where the central Argo CD runs (default: openshift-gitops)
+spec:
+  project: default                          # the root only creates Argo objects in Argo's own namespace
+  source:
+    repoURL: REPO_URL                       # https://gitlab.<org>/<group>/crl-platform.git
+    targetRevision: main
+    path: argocd/apps                       # every file here is an Argo object (ApplicationSet, Application)
+  destination:
+    server: https://kubernetes.default.svc  # the cluster where Argo itself runs
+    namespace: ARGO_NAMESPACE
+  syncPolicy:
+    automated:
+      prune: true                           # a file removed from argocd/apps -> the object is removed
+      selfHeal: true                        # an Argo object edited by hand -> put back to what Git says

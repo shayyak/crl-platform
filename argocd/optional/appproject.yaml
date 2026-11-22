@@ -1,0 +1,30 @@
+# NOT APPLIED (2026-10-27): the owner has no permission to create AppProjects in this Argo CD instance, and only the
+# owner's team uses the instance. Kept outside argocd/apps on purpose (the root would try to create it). If the instance
+# is ever shared with other teams, ask its administrators to create this AppProject and set "project: crl" in the
+# ApplicationSet template.
+#
+# AppProject "crl": the fence around everything of this project in the central (shared) Argo CD.
+# Only our repository, only our namespaces, only the kinds we deploy. A mistake in an Application cannot deploy
+# anywhere else or create anything else.
+# Replace: ARGO_NAMESPACE, REPO_URL, SOU_CLUSTER (the cluster's name as shown in Argo CD: Settings -> Clusters).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: crl
+  namespace: ARGO_NAMESPACE
+spec:
+  description: CRL distribution (newpublish) - Nginx serving layer and monitor
+  sourceRepos:
+    - REPO_URL
+  destinations:                             # one line per site (its namespace holds the 3 networks)
+    - name: SOU_CLUSTER
+      namespace: NAMESPACE_SOU
+    - name: CEN_CLUSTER
+      namespace: NAMESPACE_CEN
+  clusterResourceWhitelist: []              # nothing cluster-wide: the namespaces are created by the platform team
+  namespaceResourceWhitelist:               # exactly what the chart creates
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: Service}
+    - {group: apps, kind: Deployment}
+    - {group: policy, kind: PodDisruptionBudget}
+    - {group: route.openshift.io, kind: Route}

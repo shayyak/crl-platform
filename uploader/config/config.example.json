@@ -1,0 +1,35 @@
+{
+  "environment": "prod",
+  "sourceDirectory": "D:\\CrlPublish",
+  "certEnrollDirectory": "C:\\Windows\\System32\\CertSrv\\CertEnroll",
+  "keyPrefix": "mam/ica",
+  "logDirectory": "D:\\CrlPublisher\\logs",
+  "logRetentionDays": 30,
+  "stateFile": "D:\\CrlPublisher\\state\\published.json",
+  "s3Attempts": 3,
+  "sites": [
+    {
+      "name": "sou",
+      "endpoint": "https://s3.sou.example",
+      "bucket": "publish",
+      "region": "us-east-1",
+      "forcePathStyle": true,
+      "credentialFile": "D:\\CrlPublisher\\secrets\\sou.cred"
+    },
+    {
+      "name": "cen",
+      "endpoint": "https://s3.cen.example",
+      "bucket": "publish",
+      "region": "us-east-1",
+      "forcePathStyle": true,
+      "credentialFile": "D:\\CrlPublisher\\secrets\\cen.cred"
+    }
+  ],
+  "hec": {
+    "url": "https://splunk.example:443/services/collector/event",
+    "tokenFile": "D:\\CrlPublisher\\secrets\\hec.token",
+    "sourcetype": "crl:publisher",
+    "source": "Publish-Crl",
+    "timeoutSec": 10
+  }
+}

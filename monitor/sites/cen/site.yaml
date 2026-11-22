@@ -1,0 +1,6 @@
+# Read by the ApplicationSet (argocd/apps/crl-platform-appset.yaml): one Argo Application, crl-monitor-cen.
+app: crl-monitor                   # Application name crl-monitor-cen, Helm release (= every resource name) crl-monitor
+chart: monitor/chart/crl-monitor   # the chart this Application deploys
+site: cen                         # DR (must equal the folder name)
+cluster: CEN_CLUSTER              # the cluster's name in Argo CD (Settings -> Clusters)
+namespace: NAMESPACE_CEN          # the OpenShift project for the monitor

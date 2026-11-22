@@ -1,0 +1,53 @@
+# ApplicationSet "crl-platform": one Argo Application per component per site. Components today: crl-nginx (serving/), crl-fetch (fetch/) and crl-monitor (monitor/); sites: sou = production, cen = DR.
+#   <component>/sites/<site>/site.yaml  -> app, chart, site, cluster, namespace (read by Argo CD only)
+#   <component>/sites/<site>/values.yaml -> the component's settings for that site (read by Helm)
+#   common/ca-bundle.values.yaml         -> the CA bundle, the same for every component (created inside the network)
+# Names: Application = <app>-<site> (unique in Argo), Helm release = <app> = the name of every resource in the cluster.
+# New site = a folder with site.yaml + values.yaml. New component = <component>/chart/<chart> + <component>/sites/*
+# and one more line under "files" below. Replace: ARGO_NAMESPACE, REPO_URL (2x).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: crl-platform
+  namespace: ARGO_NAMESPACE
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]   # a site.yaml with a missing key stops instead of deploying half-filled
+  generators:
+    - git:                                  # one item per site.yaml found
+        repoURL: REPO_URL
+        revision: main
+        files:
+          - path: serving/sites/*/site.yaml
+          - path: fetch/sites/*/site.yaml
+          - path: monitor/sites/*/site.yaml
+  syncPolicy:
+    preserveResourcesOnDeletion: true       # deleting a site.yaml (or this ApplicationSet) by mistake removes the
+                                            # Argo Application only - what runs in the cluster stays up
+  template:
+    metadata:
+      name: '{{ .app }}-{{ .site }}'        # crl-nginx-sou, crl-fetch-sou, ...
+    spec:
+      project: default                      # no AppProject of our own (no permission; only our team uses this
+                                            # Argo instance). See argocd/optional/appproject.yaml
+      source:
+        repoURL: REPO_URL
+        targetRevision: main
+        path: '{{ .chart }}'                # every chart is <component>/chart/<chart>: three levels below the root
+        helm:
+          releaseName: '{{ .app }}'         # = {{ .Release.Name }} in the chart = the name of every resource
+          ignoreMissingValueFiles: true     # until common/ca-bundle.values.yaml exists the charts use their own
+                                            # files/ca-bundle.pem; with neither, the chart stops (required)
+          valueFiles:                       # relative to the chart folder; the last file wins
+            - '../../../common/ca-bundle.values.yaml'
+            - '../../sites/{{ .site }}/values.yaml'
+      destination:
+        name: '{{ .cluster }}'
+        namespace: '{{ .namespace }}'
+      syncPolicy:                           # MANUAL sync (owner, 2026-11-02): Argo shows OutOfSync and the diff,
+                                            # nothing is applied until Sync is pressed on that Application.
+                                            # No self-heal: a manual change in the cluster stays until the next sync.
+                                            # Tick "Prune" in the Sync dialog when something was removed from Git.
+        retry:
+          limit: 5
+          backoff: {duration: 30s, factor: 2, maxDuration: 10m}

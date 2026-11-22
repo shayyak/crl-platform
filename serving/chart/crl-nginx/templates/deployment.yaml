@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels: {{- include "crl-nginx.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels: {{- include "crl-nginx.labels" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}   # a new pod must be ready before an old one goes
+  template:
+    metadata:
+      labels: {{- include "crl-nginx.labels" . | nindent 8 }}
+      annotations:
+        # Any change of nginx.conf, the S3 settings or the CA bundle rolls the pods automatically.
+        checksum/config: {{ include "crl-nginx.conf" . | sha256sum }}
+        checksum/ca: {{ include "crl-nginx.caBundle" . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      affinity:
+        podAntiAffinity:            # spread the replicas over different nodes
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels: {{- include "crl-nginx.labels" . | nindent 20 }}
+      containers:
+        - name: nginx
+          image: {{ .Values.image }}
+          imagePullPolicy: IfNotPresent
+          command: ["nginx", "-c", "/etc/nginx/conf/nginx.conf", "-g", "daemon off;"]
+          ports:
+            - {name: http, containerPort: 8080}
+          lifecycle:
+            preStop:
+              # Graceful stop. Wait until the router has stopped sending to this pod, then "quit" (finish the
+              # requests in flight) instead of the SIGTERM fast shutdown that cuts them (see docs/system-dossier.md, chapter on preStop).
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - sleep 10; nginx -c /etc/nginx/conf/nginx.conf -s quit; while [ -e /tmp/nginx.pid ]; do sleep 1; done
+          readinessProbe:           # nginx only, not S3: when S3 is down the pods must keep serving the cache
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 2
+          livenessProbe:            # more tolerant than readiness: restart only a pod that is really stuck
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: {{ .Values.resources.requests.cpu | quote }}
+              memory: {{ .Values.resources.requests.memory | quote }}
+              ephemeral-storage: {{ .Values.resources.requests.ephemeralStorage | quote }}
+            limits:
+              {{- with .Values.resources.limits.cpu }}
+              cpu: {{ . | quote }}
+              {{- end }}
+              memory: {{ .Values.resources.limits.memory | quote }}
+              ephemeral-storage: {{ .Values.resources.limits.ephemeralStorage | quote }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: conf, mountPath: /etc/nginx/conf, readOnly: true}
+            - {name: s3-ca, mountPath: /etc/nginx/s3-ca, readOnly: true}
+            - {name: cache, mountPath: /var/cache/nginx}
+            - {name: tmp, mountPath: /tmp}
+            - {name: logs, mountPath: /var/log/nginx}
+      volumes:
+        - name: conf
+          configMap: {name: {{ .Release.Name }}}
+        - name: s3-ca
+          configMap: {name: {{ .Release.Name }}-s3-ca}
+        - name: cache
+          emptyDir: {sizeLimit: 1Gi}      # nginx max_size is 512m, well below
+        - name: tmp
+          emptyDir: {sizeLimit: 256Mi}
+        - name: logs
+          emptyDir: {sizeLimit: 64Mi}

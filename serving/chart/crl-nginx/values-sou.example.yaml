@@ -1,0 +1,8 @@
+# Example: site + network values in one file (in Git they are two files,
+# serving/sites/<site>/values.yaml and serving/sites/<site>/<network>/values.yaml).
+s3:
+  host: s3.sou.local
+  tenant: my-tenant
+  bucket: crl-test
+route:
+  host: ""
