@@ -1,0 +1,29 @@
+artifacts/
+logs/
+*.log
+vendor/modules/
+
+# Secrets and local config: never commit
+.env
+.env.*
+*.pfx
+*.pem
+*.key
+*.secret
+credentials*
+
+# Uploader secrets (DPAPI files and the TEMPORARY plain-text ones) and runtime state: never commit
+secrets/
+*.cred
+hec.token
+state/
+
+# The real uploader config on a CA server may hold plain-text keys (uploader 2.3.0): never commit it.
+# Only uploader/config/config.example.json goes to Git.
+config.json
+
+# The CA bundle files ARE needed in Git (public certificates). *.pem above would block them with the git CLI.
+!**/files/ca-bundle.pem
+
+# ruff lint cache (created by local and CI runs)
+.ruff_cache/

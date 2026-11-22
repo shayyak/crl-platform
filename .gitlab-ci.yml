@@ -1,0 +1,122 @@
+# CI for the CRL platform. Runs on every push and merge request.
+# Deployment is NOT done here: Argo CD (manual sync) deploys the charts from Git,
+# and the monitor is a Helm chart too (monitor/chart/crl-monitor), deployed by the same ApplicationSet.
+#
+# Stages: lint -> validate -> build
+#
+# UNVERIFIED: written without being run in this environment. After the first green run:
+#   - pin every image below by digest;
+#   - confirm the pinned tool versions exist (PSScriptAnalyzer, ruff, helm, kubeconform, kaniko);
+#   - in an environment without internet access, point the tools at an internal mirror.
+#   - helm lint for monitor uses --set site=sou; the site value is required by the chart.
+
+stages:
+  - lint
+  - validate
+  - build
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# ---------- lint ----------
+
+uploader-lint:
+  stage: lint
+  image: mcr.microsoft.com/powershell:lts-ubuntu-22.04
+  variables:
+    PSSA_VERSION: '1.24.0'
+  script:
+    - |
+      pwsh -NoProfile -Command '
+        Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+        Install-Module -Name PSScriptAnalyzer -RequiredVersion $env:PSSA_VERSION -Scope CurrentUser -Force
+      '
+    # Syntax check: any parse error fails the job.
+    - |
+      pwsh -NoProfile -Command '
+        $bad = 0
+        Get-ChildItem -Path uploader -Recurse -Filter *.ps1 | ForEach-Object {
+          $errs = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errs) | Out-Null
+          if ($errs) { $errs | ForEach-Object { Write-Host "$($_.Extent.File):$($_.Extent.StartLineNumber): $($_.Message)" }; $bad++ }
+        }
+        if ($bad) { exit 1 }
+      '
+    # Lint with the project's settings file; -EnableExit makes warnings/errors fail the job.
+    - pwsh -NoProfile -Command 'Invoke-ScriptAnalyzer -Path uploader -Recurse -Settings uploader/PSScriptAnalyzerSettings.psd1 -EnableExit'
+
+monitor-lint:
+  stage: lint
+  image: python:3.12-slim
+  variables:
+    RUFF_VERSION: '0.5.7'
+  script:
+    - pip install --no-cache-dir "ruff==${RUFF_VERSION}"
+    - ruff check monitor
+    - python -m py_compile monitor/crl_monitor.py
+
+# ---------- validate ----------
+
+charts-lint:
+  stage: validate
+  image:
+    name: alpine/helm:3.15.4
+    entrypoint: [""]
+  script:
+    # Lint each chart, then render it with every site's values (fails on a missing required value).
+    - helm lint serving/chart/crl-nginx
+    - helm lint fetch/chart/crl-fetch --set image=registry.example/pki/crl-fetch:ci
+    - helm lint monitor/chart/crl-monitor --set site=sou
+    - mkdir -p rendered
+    - |
+      for site in sou cen; do
+        helm template crl-nginx serving/chart/crl-nginx \
+          --values serving/chart/crl-nginx/values.yaml \
+          --values serving/sites/$site/values.yaml > rendered/serving-$site.yaml
+        helm template crl-fetch fetch/chart/crl-fetch \
+          --set image=registry.example/pki/crl-fetch:ci \
+          --values fetch/sites/$site/values.yaml > rendered/fetch-$site.yaml
+        helm template crl-monitor monitor/chart/crl-monitor \
+          --set image=registry.example/pki/crl-monitor:ci \
+          --values monitor/sites/$site/values.yaml > rendered/monitor-$site.yaml
+      done
+  artifacts:
+    when: always
+    paths:
+      - rendered/
+    expire_in: 14 days
+
+manifests-validate:
+  stage: validate
+  image:
+    name: ghcr.io/yannh/kubeconform:v0.6.7-alpine
+    entrypoint: [""]
+  script:
+    # Schema check of every rendered chart (serving, fetch, monitor).
+    # -ignore-missing-schemas: OpenShift kinds (Route, etc.) have no schema in the default catalog.
+    - kubeconform -strict -summary -ignore-missing-schemas rendered/*.yaml
+
+# ---------- build ----------
+
+monitor-image:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    entrypoint: [""]
+  rules:
+    # Build the image only on the default branch, so every merged version is a tagged image.
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - |
+      cat > /kaniko/.docker/config.json <<JSON
+      {"auths": {"${CI_REGISTRY}": {"auth": "$(printf '%s:%s' "${CI_REGISTRY_USER}" "${CI_REGISTRY_PASSWORD}" | base64 | tr -d '\n')"}}}
+      JSON
+    - >-
+      /kaniko/executor
+      --context "${CI_PROJECT_DIR}/monitor"
+      --dockerfile "${CI_PROJECT_DIR}/monitor/Dockerfile"
+      --destination "${CI_REGISTRY_IMAGE}/crl-monitor:${CI_COMMIT_SHORT_SHA}"
+      --destination "${CI_REGISTRY_IMAGE}/crl-monitor:latest"
+    # The digest of this image goes into monitor/chart/crl-monitor/values.yaml (image, REPLACE_WITH_DIGEST).
